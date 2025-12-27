@@ -1,7 +1,7 @@
 {
   "domain": "bluelink_kr",
   "name": "현대 블루링크",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "documentation": "https://github.com/hanwoollee/hass-bluelink-kr",
   "issue_tracker": "https://github.com/hanwoollee/hass-bluelink-kr/issues",
   "config_flow": true,
