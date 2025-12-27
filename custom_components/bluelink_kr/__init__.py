@@ -45,6 +45,7 @@ from .const import (
 )
 from .views import BluelinkUnifiedCallbackView
 from .device import async_sync_selected_vehicle
+from .frontend import async_setup_frontend, async_unload_frontend
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             )
         )
         domain_data["views_registered"] = True
+    await async_setup_frontend(hass)
     return True
 
 
@@ -387,6 +389,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             refresh_unsub: Callable | None = runtime.get("refresh_unsub")
             if refresh_unsub:
                 refresh_unsub()
+        remaining_entries = [
+            e
+            for e in hass.config_entries.async_entries(DOMAIN)
+            if e.entry_id != entry.entry_id
+        ]
+        if not remaining_entries:
+            await async_unload_frontend(hass)
     return unload_ok
 
 

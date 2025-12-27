@@ -1,13 +1,21 @@
 const CARD_VERSION = "0.1.0";
 
 /* global customElements */
+const Lit = window.Lit || {};
 const elementBase =
   customElements.get("ha-panel-lovelace") || customElements.get("hui-view");
 const LitElementBase =
+  Lit.LitElement ||
   window.LitElement ||
   (elementBase ? Object.getPrototypeOf(elementBase) : undefined);
-const html = LitElementBase?.prototype?.html || window.html;
-const css = LitElementBase?.prototype?.css || window.css;
+const html =
+  Lit.html ||
+  window.html ||
+  (LitElementBase ? LitElementBase.prototype?.html : undefined);
+const css =
+  Lit.css ||
+  window.css ||
+  (LitElementBase ? LitElementBase.prototype?.css : undefined);
 
 if (!LitElementBase || !html || !css) {
   throw new Error("Hyundai Bluelink KR card: LitElement not found.");

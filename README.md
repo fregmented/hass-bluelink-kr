@@ -68,11 +68,8 @@
 
 ## Lovelace 전용 카드
 
-- `www/bluelink-kr-card.js`로 제공되는 전용 Lovelace 카드입니다. HACS로 통합을 설치해도 `www` 폴더는 자동으로 서빙되지 않으니 Home Assistant 설정 폴더의 `www`로 직접 복사(또는 심링크)해야 합니다.
-- 등록 절차
-  1. 이 저장소의 `www/bluelink-kr-card.js`를 Home Assistant 설정 폴더의 `www/bluelink-kr-card.js` 위치에 둡니다(`config/www` 기준, `/local/bluelink-kr-card.js`로 접근).
-  2. 설정 → 대시보드 → 우상단 메뉴 → 리소스 → 리소스 추가에서 URL을 `/local/bluelink-kr-card.js`, 유형을 `JavaScript Module`로 등록합니다.
-  3. Lovelace에 카드를 추가할 때 `type: custom:bluelink-kr-card`로 설정합니다.
+- 통합에 포함된 `bluelink-kr-card.js`를 자동으로 서빙·로드합니다. Home Assistant를 재시작한 뒤 Lovelace에서 `type: custom:bluelink-kr-card` 카드만 추가하면 됩니다.
+- 구버전 HA로 인해 자동 로드가 동작하지 않는 경우에만 리소스를 수동 등록하세요: URL `/bluelink_kr/bluelink-kr-card.js`, 유형 `JavaScript Module`.
 - Lovelace 시각 편집기에서 카드 유형 선택 후 각 센서 엔티티를 바로 지정할 수 있습니다(경고 센서는 필요한 만큼 추가).
 - 예시 구성(`examples/lovelace/bluelink-kr-card.yaml`):
 
