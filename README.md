@@ -45,6 +45,7 @@
   - Home Assistant `설정 → 시스템 → 네트워크`의 `외부 URL`이 설정돼 있어야 합니다.
   - Hyundai Developers에 가입합니다.(현대차 통합계정 또는 Pleos 계정 사용) 
   - 프로젝트를 생성합니다.
+  - API 콘솔 -> 프로젝트 -> 내 차량 등록에서 등록할 차량을 활성으로 바꿉니다.
   - API 콘솔 -> 프로젝트 -> 설정에서 계정 API 리다이렉트 URL을 `https://{HASS_URL}/api/bluelink_kr/oauth/callback`으로 등록합니다.
 - 단계
   1) `Client ID`, `Client Secret`을 입력합니다(`secrets.yaml`의 `bluelink_client_id`/`bluelink_client_secret` 값이 있으면 기본값으로 불러옵니다).
