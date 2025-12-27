@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BluelinkCoordinator
 from .const import DOMAIN
-from .sensor import _device_info_from_coordinator, _entity_base_name
+from .sensor import _car_unique_id, _device_info_from_coordinator, _entity_base_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,7 +41,8 @@ class BluelinkForceRefreshButton(
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} Force Refresh"
-        self._attr_unique_id = f"{entry_id}_force_refresh"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_force_refresh"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     async def async_press(self) -> None:

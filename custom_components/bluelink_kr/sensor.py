@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -43,6 +45,13 @@ def _entity_base_name(coordinator: BluelinkCoordinator, entry_title: str) -> str
         or coordinator.selected_car_id
         or entry_title
     )
+
+
+def _car_unique_id(coordinator: BluelinkCoordinator, entry_id: str) -> str:
+    """Build a short, stable id for entities from the selected car id."""
+    car_id = coordinator.selected_car_id or entry_id
+    digest = hashlib.sha256(car_id.encode("utf-8")).hexdigest()
+    return digest[:15]
 
 
 def _format_float(value) -> float | None:
@@ -135,7 +144,8 @@ class BluelinkDrivingRangeSensor(CoordinatorEntity[BluelinkCoordinator], SensorE
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} Driving Range"
-        self._attr_unique_id = f"{entry_id}_driving_range"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_driving_range"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     @property
@@ -184,7 +194,8 @@ class BluelinkOdometerSensor(CoordinatorEntity[BluelinkCoordinator], SensorEntit
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} Odometer"
-        self._attr_unique_id = f"{entry_id}_odometer"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_odometer"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     @property
@@ -258,7 +269,8 @@ class BluelinkChargingSocSensor(_BluelinkChargingSensor):
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} EV SOC"
-        self._attr_unique_id = f"{entry_id}_ev_soc"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_ev_soc"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     @property
@@ -301,7 +313,8 @@ class BluelinkChargingPlugSensor(_BluelinkChargingSensor):
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} Charger Connection"
-        self._attr_unique_id = f"{entry_id}_charging_plugin"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_charging_plugin"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     @property
@@ -331,7 +344,8 @@ class BluelinkChargingStateSensor(_BluelinkChargingSensor):
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} Charging State"
-        self._attr_unique_id = f"{entry_id}_charging_state"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_charging_state"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     @property
@@ -362,7 +376,8 @@ class BluelinkChargingPlugTypeSensor(_BluelinkChargingSensor):
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} Charging Plug Type"
-        self._attr_unique_id = f"{entry_id}_charging_plug_type"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_charging_plug_type"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     @property
@@ -395,7 +410,8 @@ class BluelinkChargingTargetSocSensor(_BluelinkChargingSensor):
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} Charging Target SOC"
-        self._attr_unique_id = f"{entry_id}_charging_target_soc"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_charging_target_soc"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     @property
@@ -429,7 +445,8 @@ class BluelinkChargingRemainTimeSensor(_BluelinkChargingSensor):
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} Charging Time Remaining"
-        self._attr_unique_id = f"{entry_id}_charging_remain_time"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_charging_remain_time"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     @property
@@ -477,7 +494,8 @@ class BluelinkWarningSensor(CoordinatorEntity[BluelinkCoordinator], SensorEntity
         self._warning_key = warning_key
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} {label}"
-        self._attr_unique_id = f"{entry_id}_{warning_key}_warning"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_{warning_key}_warning"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     def _warning_data(self) -> dict:
@@ -513,7 +531,8 @@ class BluelinkChargingEstimateTimeSensor(_BluelinkChargingSensor):
         super().__init__(coordinator)
         base = _entity_base_name(coordinator, entry_title)
         self._attr_name = f"{base} Charging Time Estimate"
-        self._attr_unique_id = f"{entry_id}_charging_estimate_time"
+        car_uid = _car_unique_id(coordinator, entry_id)
+        self._attr_unique_id = f"{car_uid}_charging_estimate_time"
         self._attr_device_info = _device_info_from_coordinator(coordinator)
 
     @property
