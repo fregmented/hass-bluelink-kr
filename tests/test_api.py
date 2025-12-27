@@ -6,6 +6,8 @@ from custom_components.bluelink_kr.api import (
     BluelinkAuthError,
     async_get_profile,
     async_get_car_list,
+    async_get_driving_range,
+    async_get_ev_charging_status,
     async_request_terms_agreement,
     async_request_token,
 )
@@ -172,3 +174,73 @@ async def test_async_get_car_list_error(monkeypatch):
 
     with pytest.raises(BluelinkAuthError):
         await async_get_car_list(hass=None, access_token="token")
+
+
+@pytest.mark.asyncio
+async def test_async_get_driving_range_success(monkeypatch):
+    payload = {"timestamp": "20240101000000", "value": 300.0, "unit": 1, "msgId": "m1"}
+    _patch_session(monkeypatch, DummySession(payload))
+
+    result = await async_get_driving_range(
+        hass=None, access_token="token", car_id="car1"
+    )
+    assert result["value"] == 300.0
+
+
+@pytest.mark.asyncio
+async def test_async_get_driving_range_error(monkeypatch):
+    payload = {"errCode": "E3", "errMsg": "fail"}
+    _patch_session(monkeypatch, DummySession(payload, status=400))
+
+    with pytest.raises(BluelinkAuthError):
+        await async_get_driving_range(
+            hass=None, access_token="token", car_id="car1"
+        )
+
+
+@pytest.mark.asyncio
+async def test_async_get_odometer_success(monkeypatch):
+    payload = {
+        "msgId": "m2",
+        "odometers": [{"date": "20240101", "unit": 1, "value": 1234, "timestamp": "20240101120000"}],
+    }
+    _patch_session(monkeypatch, DummySession(payload))
+
+    result = await async_get_odometer(
+        hass=None, access_token="token", car_id="car1"
+    )
+    assert result["odometers"][0]["value"] == 1234
+
+
+@pytest.mark.asyncio
+async def test_async_get_odometer_error(monkeypatch):
+    payload = {"errCode": "E4", "errMsg": "fail"}
+    _patch_session(monkeypatch, DummySession(payload, status=500))
+
+    with pytest.raises(BluelinkAuthError):
+        await async_get_odometer(
+            hass=None, access_token="token", car_id="car1"
+        )
+
+
+@pytest.mark.asyncio
+async def test_async_get_ev_charging_status_success(monkeypatch):
+    payload = {"batteryCharge": True, "soc": 80.5, "msgId": "m3"}
+    _patch_session(monkeypatch, DummySession(payload))
+
+    result = await async_get_ev_charging_status(
+        hass=None, access_token="token", car_id="car1"
+    )
+    assert result["batteryCharge"] is True
+    assert result["soc"] == 80.5
+
+
+@pytest.mark.asyncio
+async def test_async_get_ev_charging_status_error(monkeypatch):
+    payload = {"errCode": "E5", "errMsg": "fail"}
+    _patch_session(monkeypatch, DummySession(payload, status=400))
+
+    with pytest.raises(BluelinkAuthError):
+        await async_get_ev_charging_status(
+            hass=None, access_token="token", car_id="car1"
+        )

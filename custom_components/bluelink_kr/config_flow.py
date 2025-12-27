@@ -50,7 +50,7 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._reauth_entry = None
         self._terms_state: str | None = None
         self._terms_url: str | None = None
-        self._pending_entry_data: dict[str, Any] | None = None
+        self._pending_auth_data: dict[str, Any] | None = None
         self._car_list: list[dict[str, Any]] | None = None
 
     async def async_step_user(
@@ -138,13 +138,10 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not user_id:
                 raise BluelinkAuthError("Profile missing id")
 
-            self._pending_entry_data = {
+            self._pending_auth_data = {
                 "client_id": self._client_id,
                 "client_secret": self._client_secret,
                 "redirect_uri": self._redirect_uri,
-                "authorization_code": user_input["authorization_code"],
-                "state": self._state,
-                "authorize_url": self._auth_url,
                 "access_token": token_result.access_token,
                 "refresh_token": token_result.refresh_token,
                 "token_type": token_result.token_type or "Bearer",
@@ -188,7 +185,7 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_abort(reason="authorization_pending")
 
-        if user_input.get("state") != self._terms_state or not self._pending_entry_data:
+        if user_input.get("state") != self._terms_state or not self._pending_auth_data:
             return self.async_abort(reason="invalid_auth")
 
         if user_input.get("err_code"):
@@ -198,16 +195,11 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not terms_user_id:
             return self.async_abort(reason="invalid_auth")
 
-        self._pending_entry_data = {
-            **self._pending_entry_data,
-            "terms_state": self._terms_state,
-            "terms_user_id": terms_user_id,
-            "terms_url": self._terms_url,
-        }
+        self._pending_auth_data["terms_user_id"] = terms_user_id
 
         try:
             car_list = await async_get_car_list(
-                self.hass, access_token=self._pending_entry_data["access_token"]
+                self.hass, access_token=self._pending_auth_data["access_token"]
             )
         except BluelinkAuthError:
             return self.async_abort(reason="invalid_auth")
@@ -224,6 +216,8 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle vehicle selection after terms agreement."""
         if not self._car_list:
             return self.async_abort(reason="no_cars")
+        if not self._pending_auth_data:
+            return self.async_abort(reason="invalid_auth")
 
         choices = {
             car["carId"]: f"{car.get('carNickname') or car.get('carName') or car['carId']}"
@@ -245,8 +239,8 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not selected_car:
             return self.async_abort(reason="invalid_auth")
 
-        entry_data = {
-            **(self._pending_entry_data or {}),
+        auth_data = dict(self._pending_auth_data or {})
+        vehicle_data = {
             "cars": self._car_list,
             "car": selected_car,
             "selected_car_id": selected_id,
@@ -254,14 +248,18 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if self._reauth_entry:
             self.hass.config_entries.async_update_entry(
-                self._reauth_entry, data={**self._reauth_entry.data, **entry_data}
+                self._reauth_entry,
+                data={**self._reauth_entry.data, **auth_data},
+                options={**self._reauth_entry.options, **vehicle_data},
             )
             self.hass.async_create_task(
                 self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
             )
             return self.async_abort(reason="reauth_successful")
 
-        return self.async_create_entry(title=DEFAULT_NAME, data=entry_data)
+        return self.async_create_entry(
+            title=DEFAULT_NAME, data=auth_data, options=vehicle_data
+        )
 
     @staticmethod
     def async_get_options_flow(config_entry):
@@ -288,7 +286,10 @@ class BluelinkOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=self.config_entry.options)
 
         access_token = self.config_entry.data.get("access_token")
-        selected_car_id = self.config_entry.data.get("selected_car_id")
+        selected_car_id = self.config_entry.options.get(
+            "selected_car_id",
+            self.config_entry.data.get("selected_car_id"),
+        )
         if not access_token:
             return self.async_abort(reason="invalid_auth")
 
@@ -304,17 +305,27 @@ class BluelinkOptionsFlow(config_entries.OptionsFlow):
             (car for car in car_list if car.get("carId") == selected_car_id), None
         )
 
-        new_data = {
-            **self.config_entry.data,
+        new_options = {
+            **self.config_entry.options,
             "cars": car_list,
             "car": selected_car,
+            "selected_car_id": selected_car_id,
         }
-        self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+        self.hass.config_entries.async_update_entry(
+            self.config_entry, options=new_options
+        )
         await async_sync_selected_vehicle(
             self.hass,
             self.config_entry,
             selected_car=selected_car,
             selected_car_id=selected_car_id,
         )
+
+        runtime = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if runtime and runtime.get("coordinator"):
+            coordinator = runtime["coordinator"]
+            coordinator.car = selected_car
+            coordinator.selected_car_id = selected_car_id
+            await coordinator.async_request_refresh()
 
         return self.async_create_entry(title="", data=self.config_entry.options)

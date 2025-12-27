@@ -12,10 +12,18 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import BluelinkAuthError, async_request_token
+from .api import (
+    BluelinkAuthError,
+    async_get_driving_range,
+    async_get_odometer,
+    async_get_ev_charging_status,
+    async_request_token,
+)
 from .const import (
     DOMAIN,
     PLATFORMS,
+    CHARGING_INTERVAL,
+    ODOMETER_INTERVAL,
     REFRESH_TOKEN_DEFAULT_EXPIRES_IN,
     REFRESH_TOKEN_REAUTH_THRESHOLD_DAYS,
     SCAN_INTERVAL,
@@ -37,6 +45,21 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
+_AUTH_KEYS = {
+    "client_id",
+    "client_secret",
+    "redirect_uri",
+    "access_token",
+    "refresh_token",
+    "token_type",
+    "access_token_expires_at",
+    "refresh_token_expires_at",
+    "user_id",
+    "terms_user_id",
+}
+_VEHICLE_KEYS = {"cars", "car", "selected_car_id"}
+
+
 class BluelinkCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Placeholder coordinator for Bluelink data."""
 
@@ -46,12 +69,13 @@ class BluelinkCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         *,
         client_id: str,
         client_secret: str,
-        authorization_code: str | None,
         redirect_uri: str,
         access_token: str | None,
         refresh_token: str | None,
         access_token_expires_at: str | None,
         refresh_token_expires_at: str | None,
+        selected_car_id: str | None,
+        car: dict[str, Any] | None,
     ) -> None:
         super().__init__(
             hass,
@@ -61,22 +85,58 @@ class BluelinkCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.client_id = client_id
         self.client_secret = client_secret
-        self.authorization_code = authorization_code
         self.redirect_uri = redirect_uri
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.access_token_expires_at = access_token_expires_at
         self.refresh_token_expires_at = refresh_token_expires_at
+        self.selected_car_id = selected_car_id
+        self.car = car
+        self._odometer: dict[str, Any] | None = None
+        self._last_odometer: dt_util.dt | None = None
+        self._charging_status: dict[str, Any] | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the Bluelink service."""
         try:
-            # TODO: Replace with real API call using OAuth tokens.
+            if not self.access_token or not self.selected_car_id:
+                raise UpdateFailed("Missing access token or selected car")
+
+            driving_range = await async_get_driving_range(
+                self.hass,
+                access_token=self.access_token,
+                car_id=self.selected_car_id,
+            )
+
+            charging_status = await async_get_ev_charging_status(
+                self.hass,
+                access_token=self.access_token,
+                car_id=self.selected_car_id,
+            )
+            self._charging_status = charging_status
+            is_charging = bool(charging_status.get("batteryCharge"))
+            self.update_interval = CHARGING_INTERVAL if is_charging else SCAN_INTERVAL
+
+            # Fetch odometer every ODOMETER_INTERVAL.
+            now = dt_util.utcnow()
+            if not self._last_odometer or (
+                now - self._last_odometer
+            ) >= ODOMETER_INTERVAL:
+                self._odometer = await async_get_odometer(
+                    self.hass,
+                    access_token=self.access_token,
+                    car_id=self.selected_car_id,
+                )
+                self._last_odometer = now
+
             return {
-                "vehicle_count": 0,
+                "driving_range": driving_range,
+                "charging_status": charging_status,
+                "odometer": self._odometer,
+                "car": self.car,
+                "selected_car_id": self.selected_car_id,
                 "client_id": self.client_id,
                 "redirect_uri": self.redirect_uri,
-                "authorization_code": self.authorization_code,
                 "access_token": self.access_token,
             }
         except Exception as err:
@@ -87,22 +147,38 @@ class BluelinkCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Update tokens stored on the coordinator."""
         self.access_token = access_token
         self.refresh_token = refresh_token
+        # If tokens were refreshed, keep car selection unchanged.
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Bluelink KR from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
+    data = dict(entry.data)
+    options = dict(entry.options)
+    if _VEHICLE_KEYS & data.keys() and not (_VEHICLE_KEYS & options.keys()):
+        for key in _VEHICLE_KEYS:
+            if key in data:
+                options[key] = data[key]
+
+    trimmed_data = {key: data[key] for key in _AUTH_KEYS if key in data}
+    if trimmed_data != data or options != dict(entry.options):
+        hass.config_entries.async_update_entry(
+            entry, data=trimmed_data, options=options
+        )
+        data = trimmed_data
+
     coordinator = BluelinkCoordinator(
         hass,
-        client_id=entry.data["client_id"],
-        client_secret=entry.data["client_secret"],
-        authorization_code=entry.data.get("authorization_code"),
-        redirect_uri=entry.data.get("redirect_uri", ""),
-        access_token=entry.data.get("access_token"),
-        refresh_token=entry.data.get("refresh_token"),
-        access_token_expires_at=entry.data.get("access_token_expires_at"),
-        refresh_token_expires_at=entry.data.get("refresh_token_expires_at"),
+        client_id=data["client_id"],
+        client_secret=data["client_secret"],
+        redirect_uri=data.get("redirect_uri", ""),
+        access_token=data.get("access_token"),
+        refresh_token=data.get("refresh_token"),
+        access_token_expires_at=data.get("access_token_expires_at"),
+        refresh_token_expires_at=data.get("refresh_token_expires_at"),
+        selected_car_id=options.get("selected_car_id"),
+        car=options.get("car"),
     )
 
     runtime: dict[str, Any] = {"coordinator": coordinator, "refresh_unsub": None}
@@ -118,8 +194,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_sync_selected_vehicle(
         hass,
         entry,
-        selected_car=entry.data.get("car"),
-        selected_car_id=entry.data.get("selected_car_id"),
+        selected_car=options.get("car"),
+        selected_car_id=options.get("selected_car_id"),
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
