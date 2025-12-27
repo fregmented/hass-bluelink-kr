@@ -1,0 +1,7 @@
+{
+  "name": "현대 블루링크",
+  "content_in_root": false,
+  "render_readme": true,
+  "domains": ["button", "sensor"],
+  "country": ["KR"]
+}

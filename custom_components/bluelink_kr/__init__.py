@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+import asyncio
 from typing import Any, Callable
 
 from homeassistant.components import persistent_notification
@@ -17,32 +18,57 @@ from .api import (
     async_get_driving_range,
     async_get_odometer,
     async_get_ev_charging_status,
+    async_get_ev_battery_status,
+    async_get_low_fuel_warning,
+    async_get_tire_pressure_warning,
+    async_get_lamp_wire_warning,
+    async_get_smart_key_battery_warning,
+    async_get_washer_fluid_warning,
+    async_get_brake_oil_warning,
+    async_get_engine_oil_warning,
     async_request_token,
 )
 from .const import (
     DOMAIN,
     PLATFORMS,
     CHARGING_INTERVAL,
+    DRIVING_RANGE_INTERVAL,
     ODOMETER_INTERVAL,
+    OAUTH_CALLBACK_PATH,
     REFRESH_TOKEN_DEFAULT_EXPIRES_IN,
     REFRESH_TOKEN_REAUTH_THRESHOLD_DAYS,
     SCAN_INTERVAL,
+    TERMS_CALLBACK_PATH,
+    WARNING_INTERVAL,
+    BATTERY_INTERVAL,
+    CHARGING_INTERVAL,
+    is_ev_capable_car_type,
+    normalize_car_type,
 )
-from .views import BluelinkOAuthCallbackView, BluelinkTermsCallbackView
+from .views import BluelinkUnifiedCallbackView
 from .device import async_sync_selected_vehicle
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the Bluelink KR component."""
+    """Set up the 현대 블루링크 component."""
     domain_data = hass.data.setdefault(DOMAIN, {})
+    domain_data.setdefault("callback_states", {})
     domain_data.setdefault("oauth_states", {})
     domain_data.setdefault("reauth_notified", set())
     domain_data.setdefault("terms_states", {})
     if not domain_data.get("views_registered"):
-        hass.http.register_view(BluelinkOAuthCallbackView(hass))
-        hass.http.register_view(BluelinkTermsCallbackView(hass))
+        hass.http.register_view(
+            BluelinkUnifiedCallbackView(
+                hass, url=OAUTH_CALLBACK_PATH, name="api:bluelink_kr:oauth_callback"
+            )
+        )
+        hass.http.register_view(
+            BluelinkUnifiedCallbackView(
+                hass, url=TERMS_CALLBACK_PATH, name="api:bluelink_kr:terms_callback"
+            )
+        )
         domain_data["views_registered"] = True
     return True
 
@@ -94,9 +120,72 @@ class BluelinkCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.refresh_token_expires_at = refresh_token_expires_at
         self.selected_car_id = selected_car_id
         self.car = car
+        self.car_type = normalize_car_type(car.get("carType") if car else None)
+        self.is_ev_capable = is_ev_capable_car_type(self.car_type)
         self._odometer: dict[str, Any] | None = None
         self._last_odometer: dt_util.dt | None = None
+        self._driving_range: dict[str, Any] | None = None
+        self._last_driving_range: dt_util.dt | None = None
+        self._warnings: dict[str, Any] | None = None
+        self._last_warnings: dt_util.dt | None = None
         self._charging_status: dict[str, Any] | None = None
+        self._battery_status: dict[str, Any] | None = None
+        self._last_battery_status: dt_util.dt | None = None
+        self._last_charging_status: dt_util.dt | None = None
+
+    def _should_fetch(self, last: dt_util.dt | None, interval: timedelta, now) -> bool:
+        """Return True if data should be refreshed."""
+        if last is None:
+            return True
+        return (now - last) >= interval
+
+    async def _async_fetch_warnings(self, access_token: str) -> dict[str, Any]:
+        """Fetch all warning endpoints."""
+        if not self.selected_car_id:
+            return {}
+
+        warnings: dict[str, Any] = {}
+        car_id = self.selected_car_id
+        warnings["low_fuel"] = await async_get_low_fuel_warning(
+            self.hass,
+            access_token=access_token,
+            car_id=car_id,
+        )
+        warnings["tire_pressure"] = await async_get_tire_pressure_warning(
+            self.hass,
+            access_token=access_token,
+            car_id=car_id,
+        )
+        warnings["lamp_wire"] = await async_get_lamp_wire_warning(
+            self.hass,
+            access_token=access_token,
+            car_id=car_id,
+        )
+        warnings["smart_key_battery"] = await async_get_smart_key_battery_warning(
+            self.hass,
+            access_token=access_token,
+            car_id=car_id,
+        )
+        warnings["washer_fluid"] = await async_get_washer_fluid_warning(
+            self.hass,
+            access_token=access_token,
+            car_id=car_id,
+        )
+        warnings["brake_oil"] = await async_get_brake_oil_warning(
+            self.hass,
+            access_token=access_token,
+            car_id=car_id,
+        )
+        if self.car_type != "EV":
+            warnings["engine_oil"] = await async_get_engine_oil_warning(
+                self.hass,
+                access_token=access_token,
+                car_id=car_id,
+            )
+        else:
+            warnings["engine_oil"] = None
+
+        return warnings
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the Bluelink service."""
@@ -104,26 +193,47 @@ class BluelinkCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not self.access_token or not self.selected_car_id:
                 raise UpdateFailed("Missing access token or selected car")
 
-            driving_range = await async_get_driving_range(
-                self.hass,
-                access_token=self.access_token,
-                car_id=self.selected_car_id,
-            )
+            now = dt_util.utcnow()
 
-            charging_status = await async_get_ev_charging_status(
-                self.hass,
-                access_token=self.access_token,
-                car_id=self.selected_car_id,
-            )
-            self._charging_status = charging_status
-            is_charging = bool(charging_status.get("batteryCharge"))
-            self.update_interval = CHARGING_INTERVAL if is_charging else SCAN_INTERVAL
+            if self._should_fetch(self._last_driving_range, DRIVING_RANGE_INTERVAL, now):
+                self._driving_range = await async_get_driving_range(
+                    self.hass,
+                    access_token=self.access_token,
+                    car_id=self.selected_car_id,
+                )
+                self._last_driving_range = now
+
+            if self.is_ev_capable and self._should_fetch(
+                self._last_battery_status, BATTERY_INTERVAL, now
+            ):
+                self._battery_status = await async_get_ev_battery_status(
+                    self.hass,
+                    access_token=self.access_token,
+                    car_id=self.selected_car_id,
+                )
+                self._last_battery_status = now
+
+            if self.is_ev_capable and self._should_fetch(
+                self._last_charging_status, CHARGING_INTERVAL, now
+            ):
+                charging_status = await async_get_ev_charging_status(
+                    self.hass,
+                    access_token=self.access_token,
+                    car_id=self.selected_car_id,
+                )
+                self._charging_status = charging_status
+                self._last_charging_status = now
+            elif not self.is_ev_capable:
+                _LOGGER.debug(
+                    "Skipping EV charging poll; car_type=%s", self.car_type or "unknown"
+                )
+                self._charging_status = None
+                self._last_charging_status = None
+                self._battery_status = None
+                self._last_battery_status = None
 
             # Fetch odometer every ODOMETER_INTERVAL.
-            now = dt_util.utcnow()
-            if not self._last_odometer or (
-                now - self._last_odometer
-            ) >= ODOMETER_INTERVAL:
+            if self._should_fetch(self._last_odometer, ODOMETER_INTERVAL, now):
                 self._odometer = await async_get_odometer(
                     self.hass,
                     access_token=self.access_token,
@@ -131,10 +241,16 @@ class BluelinkCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 self._last_odometer = now
 
+            if self._should_fetch(self._last_warnings, WARNING_INTERVAL, now):
+                self._warnings = await self._async_fetch_warnings(self.access_token)
+                self._last_warnings = now
+
             return {
-                "driving_range": driving_range,
-                "charging_status": charging_status,
+                "driving_range": self._driving_range,
+                "charging_status": self._charging_status,
+                "battery_status": self._battery_status,
                 "odometer": self._odometer,
+                "warnings": self._warnings,
                 "car": self.car,
                 "selected_car_id": self.selected_car_id,
                 "client_id": self.client_id,
@@ -151,9 +267,73 @@ class BluelinkCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.refresh_token = refresh_token
         # If tokens were refreshed, keep car selection unchanged.
 
+    async def async_force_refresh(self) -> None:
+        """Force refresh all endpoints sequentially with small delays."""
+        if not self.access_token or not self.selected_car_id:
+            raise UpdateFailed("Missing access token or selected car")
+
+        now = dt_util.utcnow()
+        car_id = self.selected_car_id
+
+        self._driving_range = await async_get_driving_range(
+            self.hass,
+            access_token=self.access_token,
+            car_id=car_id,
+        )
+        await asyncio.sleep(0.1)
+
+        if self.is_ev_capable:
+            self._battery_status = await async_get_ev_battery_status(
+                self.hass,
+                access_token=self.access_token,
+                car_id=car_id,
+            )
+            self._last_battery_status = now
+            await asyncio.sleep(0.1)
+
+            self._charging_status = await async_get_ev_charging_status(
+                self.hass,
+                access_token=self.access_token,
+                car_id=car_id,
+            )
+            self._last_charging_status = now
+            await asyncio.sleep(0.1)
+        else:
+            self._charging_status = None
+            self._battery_status = None
+            self._last_battery_status = None
+            self._last_charging_status = None
+
+        self._odometer = await async_get_odometer(
+            self.hass,
+            access_token=self.access_token,
+            car_id=car_id,
+        )
+        self._last_odometer = now
+        await asyncio.sleep(0.1)
+
+        self._warnings = await self._async_fetch_warnings(self.access_token)
+        self._last_warnings = now
+        self._last_driving_range = now
+
+        self.async_set_updated_data(
+            {
+                "driving_range": self._driving_range,
+                "charging_status": self._charging_status,
+                "battery_status": self._battery_status,
+                "odometer": self._odometer,
+                "warnings": self._warnings,
+                "car": self.car,
+                "selected_car_id": self.selected_car_id,
+                "client_id": self.client_id,
+                "redirect_uri": self.redirect_uri,
+                "access_token": self.access_token,
+            }
+        )
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Bluelink KR from a config entry."""
+    """Set up 현대 블루링크 from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
     data = dict(entry.data)
@@ -189,7 +369,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         await coordinator.async_config_entry_first_refresh()
     except UpdateFailed as err:
-        raise ConfigEntryNotReady from err
+        _LOGGER.warning(
+            "Initial refresh failed; proceeding with coordinator setup anyway: %s", err
+        )
+        coordinator.last_update_success = False
 
     runtime["refresh_unsub"] = _setup_token_refresh(hass, entry, coordinator)
 
@@ -249,6 +432,12 @@ def _setup_token_refresh(
             or entry.data.get("refresh_token_expires_at"),
         }
 
+        _LOGGER.debug(
+            "Access token refreshed (len=%d): %s",
+            len(token_result.access_token),
+            token_result.access_token,
+        )
+
         hass.config_entries.async_update_entry(entry, data=new_data)
         coordinator.update_tokens(
             access_token=new_data["access_token"],
@@ -283,8 +472,8 @@ def _maybe_request_reauth(
 
         persistent_notification.async_create(
             hass,
-            "Hyundai Bluelink (KR) 로그인 후 364일이 지나 재인증이 필요합니다. 통합을 다시 설정하세요.",
-            title="Bluelink KR 재인증 필요",
+            "현대 블루링크 로그인 후 364일이 지나 재인증이 필요합니다. 통합을 다시 설정하세요.",
+            title="현대 블루링크 재인증 필요",
             notification_id=f"{DOMAIN}_reauth_{entry.entry_id}",
         )
         notified.add(entry.entry_id)

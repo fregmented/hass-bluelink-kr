@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from aiohttp import web
 
 from homeassistant.components.http import HomeAssistantView
@@ -7,96 +9,76 @@ from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN, OAUTH_CALLBACK_PATH, TERMS_CALLBACK_PATH
 
+_LOGGER = logging.getLogger(__name__)
 
-class BluelinkOAuthCallbackView(HomeAssistantView):
-    """Handle OAuth redirect from Hyundai Bluelink (KR)."""
 
-    url = OAUTH_CALLBACK_PATH
-    name = "api:bluelink_kr:oauth_callback"
+class BluelinkUnifiedCallbackView(HomeAssistantView):
+    """Handle OAuth and terms callbacks; choose flow based on available state stores."""
+
     requires_auth = False
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, url: str, name: str) -> None:
         self.hass = hass
+        self.url = url
+        self.name = name
 
     @callback
     async def get(self, request: web.Request) -> web.Response:
         code = request.query.get("code")
         state = request.query.get("state")
-
-        if not code or not state:
-            return web.Response(status=400, text="Missing code or state.")
-
-        domain_data = self.hass.data.setdefault(DOMAIN, {})
-        oauth_states: dict[str, str] = domain_data.setdefault("oauth_states", {})
-        flow_id = oauth_states.pop(state, None)
-
-        if not flow_id:
-            return web.Response(status=400, text="Unknown or expired state.")
-
-        # Resume the config flow with the received authorization code.
-        try:
-            await self.hass.config_entries.flow.async_configure(
-                flow_id,
-                user_input={"authorization_code": code, "state": state},
-            )
-        except ValueError:
-            return web.Response(
-                status=400,
-                text="Flow not in expected state. Please restart the integration setup.",
-            )
-
-        return web.Response(
-            text="Authorization received. You can close this window and return to Home Assistant."
-        )
-
-
-class BluelinkTermsCallbackView(HomeAssistantView):
-    """Handle terms agreement redirect from Hyundai Bluelink (KR)."""
-
-    url = TERMS_CALLBACK_PATH
-    name = "api:bluelink_kr:terms_callback"
-    requires_auth = False
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        self.hass = hass
-
-    @callback
-    async def get(self, request: web.Request) -> web.Response:
-        state = request.query.get("state")
         user_id = request.query.get("userId")
         err_code = request.query.get("errCode")
         err_msg = request.query.get("errMsg")
 
-        if not state:
-            return web.Response(status=400, text="Missing state.")
-
         domain_data = self.hass.data.setdefault(DOMAIN, {})
-        terms_states: dict[str, str] = domain_data.setdefault("terms_states", {})
-        flow_id = terms_states.pop(state, None)
+        callback_states: dict[str, str] = domain_data.setdefault("callback_states", {})
+        legacy_oauth: dict[str, str] = domain_data.setdefault("oauth_states", {})
+        legacy_terms: dict[str, str] = domain_data.setdefault("terms_states", {})
 
-        if not flow_id:
-            return web.Response(status=400, text="Unknown or expired state.")
+        if not callback_states and (legacy_oauth or legacy_terms):
+            # Migrate any legacy stored states from before the unified map.
+            for legacy_state, flow_id in legacy_oauth.items():
+                callback_states.setdefault(legacy_state, flow_id)
+            for legacy_state, flow_id in legacy_terms.items():
+                callback_states.setdefault(legacy_state, flow_id)
 
-        await self.hass.config_entries.flow.async_configure(
-            flow_id,
-            user_input={
-                "state": state,
-                "user_id": user_id,
-                "err_code": err_code,
-                "err_msg": err_msg,
-            },
+        _LOGGER.debug(
+            "Callback received: state=%s path=%s code_present=%s callback_states=%d",
+            state,
+            self.url,
+            bool(code),
+            len(callback_states),
         )
-        except ValueError:
-            return web.Response(
-                status=400,
-                text="Flow not in expected state. Please restart the integration setup.",
-            )
+
+        if not state or state not in callback_states:
+            return web.Response(status=400, text="No active flow.")
+
+        flow_id = callback_states.pop(state)
 
         if err_code:
             return web.Response(
-                text="Terms agreement failed. You can close this window and return to Home Assistant."
+                text=f"terms mode\nTerms agreement failed. You can close this window and return to Home Assistant.\ndomain_data: {domain_data}"
+            )
+
+        authorization = code or user_id
+        if not authorization:
+            return web.Response(
+                status=400,
+                text=f"missing authorization\nNo code or userId provided.\ndomain_data: {domain_data}",
+            )
+
+        try:
+            await self.hass.config_entries.flow.async_configure(
+                flow_id,
+                user_input={"authorization": authorization},
+            )
+        except ValueError as e:
+            callback_states[state] = flow_id
+            return web.Response(
+                status=400,
+                text=f"Flow not in expected state. Please restart the integration setup.\ndomain_data: {domain_data}\nerror: {e}",
             )
 
         return web.Response(
-            text="Terms agreement received. You can close this window and return to Home Assistant."
+            text=f"Authorization received. You can close this window and return to Home Assistant.\ndomain_data: {domain_data}"
         )

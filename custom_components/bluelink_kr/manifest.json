@@ -1,11 +1,17 @@
 {
   "domain": "bluelink_kr",
-  "name": "Hyundai Bluelink (KR)",
-  "version": "0.0.1",
+  "name": "현대 블루링크",
+  "version": "0.0.3",
   "documentation": "https://github.com/hanwoollee/hass-bluelink-kr",
+  "issue_tracker": "https://github.com/hanwoollee/hass-bluelink-kr/issues",
   "config_flow": true,
   "requirements": [],
   "codeowners": ["@hanwoollee"],
   "iot_class": "cloud_polling",
-  "integration_type": "service"
+  "integration_type": "service",
+  "loggers": ["custom_components.bluelink_kr"],
+  "icon": "icon.png",
+  "logo": "logo.png",
+  "icon_dark": "dark_icon.png",
+  "logo_dark": "dark_logo.png"
 }

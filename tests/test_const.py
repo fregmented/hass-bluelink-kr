@@ -3,6 +3,8 @@ from __future__ import annotations
 from custom_components.bluelink_kr.const import (
     build_authorize_url,
     build_terms_agreement_url,
+    is_ev_capable_car_type,
+    normalize_car_type,
 )
 
 
@@ -21,3 +23,17 @@ def test_build_terms_agreement_url_encodes_params():
     url = build_terms_agreement_url(access_token="abc 123", state="st@te")
     assert "token=Bearer%20abc%20123" in url
     assert "state=st%40te" in url
+
+
+def test_normalize_car_type_handles_whitespace_and_case():
+    assert normalize_car_type(" ev ") == "EV"
+    assert normalize_car_type(None) is None
+
+
+def test_is_ev_capable_car_type():
+    assert is_ev_capable_car_type("EV") is True
+    assert is_ev_capable_car_type("PHEV") is True
+    assert is_ev_capable_car_type("FCEV") is True
+    assert is_ev_capable_car_type("HEV") is False
+    assert is_ev_capable_car_type("GN") is False
+    assert is_ev_capable_car_type(None) is True

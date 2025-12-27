@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
+import logging
 
 from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
 
+_LOGGER = logging.getLogger(__name__)
 
 def _extract_car_id(device: dr.DeviceEntry) -> str | None:
     for domain, value in device.identifiers:
@@ -26,13 +28,18 @@ async def async_sync_selected_vehicle(
     active_ids: set[str] = set()
 
     if selected_car and selected_car_id:
+        _LOGGER.warning(f"SELECTED CAR: {selected_car}")
         name = (
             selected_car.get("carNickname")
             or selected_car.get("carName")
             or selected_car_id
         )
-        model = selected_car.get("carType")
-        sw = selected_car.get("carSellname")
+        model = (
+            selected_car.get("carSellname")
+            or selected_car.get("carName")
+            or selected_car.get("carType")
+        )
+        sw = None
 
         device = registry.async_get_device({(DOMAIN, selected_car_id)})
         if device is None:
@@ -58,7 +65,12 @@ async def async_sync_selected_vehicle(
         active_ids.add(selected_car_id)
 
     # Disable devices not present anymore
-    for device in registry.async_entries_for_config_entry(entry.entry_id):
+    devices = (
+        registry.async_entries_for_config_entry(entry.entry_id)
+        if hasattr(registry, "async_entries_for_config_entry")
+        else [d for d in registry.devices.values() if entry.entry_id in d.config_entries]
+    )
+    for device in devices:
         car_id = _extract_car_id(device)
         if not car_id or car_id in active_ids:
             continue

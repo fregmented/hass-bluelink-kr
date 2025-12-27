@@ -1,9 +1,9 @@
 {
-  "title": "현대 블루링크 (대한민국)",
+  "title": "현대 블루링크",
   "config": {
     "step": {
       "user": {
-        "title": "현대 블루링크(대한민국) OAuth 설정",
+        "title": "현대 블루링크 OAuth 설정",
         "description": "대한민국 현대 블루링크 OAuth 클라이언트 정보를 입력하세요. API 콘솔 > 설정에서 로그인 리다이렉트 URL은 {oauth_callback_url}, 데이터 리다이렉트 URL은 {terms_callback_url}로 등록하세요. 확인 후 Home Assistant 외부 URL을 redirect_uri로 사용해 로그인 페이지가 새 창/웹뷰로 열립니다.",
         "data": {
           "client_id": "Client ID",
