@@ -28,7 +28,6 @@ from .const import (
     TIRE_PRESSURE_WARNING_URL,
     WASHER_FLUID_WARNING_URL,
     REFRESH_TOKEN_DEFAULT_EXPIRES_IN,
-    TERMS_AGREEMENT_URL,
     TOKEN_URL,
     EV_BATTERY_URL,
 )
@@ -176,28 +175,6 @@ async def async_get_profile(hass: HomeAssistant, *, access_token: str) -> dict[s
     _LOGGER.info("Profile response (%s): %s", resp.status, payload)
 
     return payload
-
-
-async def async_request_terms_agreement(
-    hass: HomeAssistant, *, access_token: str, state: str
-) -> None:
-    """Initiate the terms agreement call."""
-    _log_access_token("Terms agreement request", access_token)
-    session = async_get_clientsession(hass)
-    payload = {"token": f"Bearer {access_token}", "state": state}
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    try:
-        resp = await session.post(TERMS_AGREEMENT_URL, data=payload, headers=headers)
-    except ClientResponseError as err:
-        raise BluelinkAuthError(f"Terms request failed: {err}") from err
-    except Exception as err:  # noqa: BLE001
-        raise BluelinkAuthError(f"Terms request failed: {err}") from err
-
-    text = await resp.text()
-    _LOGGER.info("Terms response (%s): %s", resp.status, text)
-
-    if resp.status not in (200, 302):
-        raise BluelinkAuthError(f"Terms request failed ({resp.status}): {text}")
 
 
 async def async_get_car_list(hass: HomeAssistant, *, access_token: str) -> list[dict]:

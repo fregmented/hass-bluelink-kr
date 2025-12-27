@@ -31,14 +31,12 @@ from .api import (
 from .const import (
     DOMAIN,
     PLATFORMS,
-    CHARGING_INTERVAL,
     DRIVING_RANGE_INTERVAL,
     ODOMETER_INTERVAL,
     OAUTH_CALLBACK_PATH,
     REFRESH_TOKEN_DEFAULT_EXPIRES_IN,
     REFRESH_TOKEN_REAUTH_THRESHOLD_DAYS,
     SCAN_INTERVAL,
-    TERMS_CALLBACK_PATH,
     WARNING_INTERVAL,
     BATTERY_INTERVAL,
     CHARGING_INTERVAL,
@@ -57,16 +55,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     domain_data.setdefault("callback_states", {})
     domain_data.setdefault("oauth_states", {})
     domain_data.setdefault("reauth_notified", set())
-    domain_data.setdefault("terms_states", {})
     if not domain_data.get("views_registered"):
         hass.http.register_view(
             BluelinkUnifiedCallbackView(
                 hass, url=OAUTH_CALLBACK_PATH, name="api:bluelink_kr:oauth_callback"
-            )
-        )
-        hass.http.register_view(
-            BluelinkUnifiedCallbackView(
-                hass, url=TERMS_CALLBACK_PATH, name="api:bluelink_kr:terms_callback"
             )
         )
         domain_data["views_registered"] = True
@@ -83,7 +75,6 @@ _AUTH_KEYS = {
     "access_token_expires_at",
     "refresh_token_expires_at",
     "user_id",
-    "terms_user_id",
 }
 _VEHICLE_KEYS = {"cars", "car", "selected_car_id"}
 

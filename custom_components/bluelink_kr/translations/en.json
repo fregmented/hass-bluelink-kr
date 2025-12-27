@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "현대 블루링크 OAuth setup",
-        "description": "Enter your 현대 블루링크 OAuth client details. In the API console Settings, set Login redirect URL to {oauth_callback_url} and Data redirect URL to {terms_callback_url}. After confirming, the login page will open in a new window/webview using your Home Assistant external URL as redirect_uri.",
+        "description": "Enter your 현대 블루링크 OAuth client details. In the API console Settings, set Login redirect URL to {oauth_callback_url}. After confirming, the login page will open in a new window/webview using your Home Assistant external URL as redirect_uri.",
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret"

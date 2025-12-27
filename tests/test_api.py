@@ -8,7 +8,6 @@ from custom_components.bluelink_kr.api import (
     async_get_car_list,
     async_get_driving_range,
     async_get_ev_charging_status,
-    async_request_terms_agreement,
     async_request_token,
 )
 
@@ -134,25 +133,6 @@ async def test_async_get_profile_error(monkeypatch):
 
     with pytest.raises(BluelinkAuthError):
         await async_get_profile(hass=None, access_token="token")
-
-
-@pytest.mark.asyncio
-async def test_async_request_terms_agreement_success(monkeypatch):
-    _patch_session(monkeypatch, DummySession({}, status=200))
-
-    await async_request_terms_agreement(
-        hass=None, access_token="token", state="state-value"
-    )
-
-
-@pytest.mark.asyncio
-async def test_async_request_terms_agreement_error(monkeypatch):
-    _patch_session(monkeypatch, DummySession({"err": "x"}, status=500))
-
-    with pytest.raises(BluelinkAuthError):
-        await async_request_terms_agreement(
-            hass=None, access_token="token", state="state-value"
-        )
 
 
 @pytest.mark.asyncio

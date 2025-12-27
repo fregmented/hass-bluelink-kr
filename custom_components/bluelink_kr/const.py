@@ -21,8 +21,6 @@ AUTH_URL = (
     "client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&state={state}"
 )
 TOKEN_URL = "https://prd.kr-ccapi.hyundai.com/api/v1/user/oauth2/token"
-TERMS_AGREEMENT_URL = "https://dev.kr-ccapi.hyundai.com/api/v1/car-service/terms/agreement"
-TERMS_CALLBACK_PATH = "/api/bluelink_kr/terms/callback"
 PROFILE_URL = "https://prd.kr-ccapi.hyundai.com/api/v1/user/profile"
 CAR_LIST_URL = "https://dev.kr-ccapi.hyundai.com/api/v1/car/profile/carlist"
 DRIVING_RANGE_URL = "https://dev.kr-ccapi.hyundai.com/api/v1/car/status/{carId}/dte"
@@ -109,9 +107,3 @@ def build_authorize_url(client_id: str, redirect_uri: str, state: str) -> str:
         redirect_uri=quote(redirect_uri),
         state=quote(state),
     )
-
-
-def build_terms_agreement_url(access_token: str, state: str) -> str:
-    """Build the terms agreement URL for user data sharing."""
-    token_param = quote(f"Bearer {access_token}")
-    return f"{TERMS_AGREEMENT_URL}?token={token_param}&state={quote(state)}"

@@ -2,11 +2,11 @@
 
 ## This integration uses APIs for internal use in Republic of Korea. It is not available for Hyundai vehicles sold outside of the Republic of Korea.
 
-현대 블루링크 대한민국 계정을 Home Assistant에 연결하는 커스텀 통합입니다. OAuth/데이터 동의 콜백을 HA 내부 HTTP 서버에서 처리하고, 선택한 차량의 주행/EV/경고 상태를 주기적으로 폴링합니다. 
+현대 블루링크 대한민국 계정을 Home Assistant에 연결하는 커스텀 통합입니다. OAuth 콜백을 HA 내부 HTTP 서버에서 처리하고, 선택한 차량의 주행/EV/경고 상태를 주기적으로 폴링합니다. 
 
 ## 현재 기능
 
-- OAuth 로그인 후 차량 목록을 불러와 선택합니다. `external_url`을 기반으로 `/api/bluelink_kr/oauth/callback`, `/api/bluelink_kr/terms/callback` 뷰를 등록합니다.
+- OAuth 로그인 후 차량 목록을 불러와 선택합니다. `external_url`을 기반으로 `/api/bluelink_kr/oauth/callback` 뷰를 등록합니다.
 - 차량 기기 동기화: 선택한 차량을 장치 레지스트리에 등록하고 옵션 플로우의 “재검색”으로 목록을 다시 받아오며, 목록에 없어진 차량은 통합 비활성화 상태로 전환합니다.
 - 엔티티
   - 센서: 주행가능거리, 누적 주행거리
@@ -15,24 +15,20 @@
   - 경고 센서: 연료/HV 배터리, 타이어 공기압, 램프, 스마트키 배터리, 워셔액, 브레이크 오일, 엔진 오일(비 EV)
   - 버튼: 강제 새로고침(모든 엔드포인트 순차 호출)
 - 폴링 주기: 기본 코디네이터 5분 틱, 주행가능거리/주행거리/경고 60분, EV 배터리 5분, EV 충전 10분. 버튼으로 즉시 전체 새로고침 가능.
-- 토큰 관리: 24시간마다 access token 자동 갱신, refresh token 발급 후 364일 경과 시 재인증 알림 및 reauth 플로우 기동.
-- 번들 리소스: `examples/bluelink_kr_widget.yaml` Lovelace 카드, HA 통합 카드용 아이콘·로고(`custom_components/bluelink_kr/icon.png`, `logo.png` 등).
 
 ## 포함 구성요소
 
 - `custom_components/bluelink_kr/manifest.json`: 통합 메타데이터.
 - `custom_components/bluelink_kr/__init__.py`: 엔트리 설정, 토큰 관리/갱신, 데이터 업데이트 코디네이터, 강제 새로고침 처리.
 - `custom_components/bluelink_kr/api.py`: OAuth/프로필/차량 목록, 주행가능거리·주행거리·EV 충전/배터리·경고 API 호출 래퍼.
-- `custom_components/bluelink_kr/config_flow.py`: OAuth 클라이언트/로그인·terms 플로우, 차량 선택 및 옵션 재검색.
+- `custom_components/bluelink_kr/config_flow.py`: OAuth 클라이언트/로그인 플로우, 차량 선택 및 옵션 재검색.
 - `custom_components/bluelink_kr/sensor.py`: 센서 엔티티 정의.
 - `custom_components/bluelink_kr/button.py`: 강제 새로고침 버튼.
 - `custom_components/bluelink_kr/device.py`: 선택 차량 기기 등록/비활성화 관리.
-- `custom_components/bluelink_kr/views.py`: OAuth/terms 통합 콜백 엔드포인트.
+- `custom_components/bluelink_kr/views.py`: OAuth 통합 콜백 엔드포인트.
 - `custom_components/bluelink_kr/strings.json` 및 `translations/*.json`: 설정 플로우 텍스트와 번역.
 
 ## 설치 방법
-
-HACS를 통해 설치하면 번들된 `logo.png`/`icon.png`가 그대로 배포되어 `brands.home-assistant.io` 기본 로고로 치환되지 않습니다.
 
 - HACS (권장)
   1. HACS → Integrations → 우상단 메뉴 → `Custom repositories`에서 `https://github.com/hanwoollee/hass-bluelink-kr`를 추가하고 Category를 `Integration`으로 선택합니다.
@@ -49,21 +45,16 @@ HACS를 통해 설치하면 번들된 `logo.png`/`icon.png`가 그대로 배포�
   - Home Assistant `설정 → 시스템 → 네트워크`의 `외부 URL`이 설정돼 있어야 합니다.
   - Hyundai Developers에 가입합니다.(현대차 통합계정 또는 Pleos 계정 사용) 
   - 프로젝트를 생성합니다.
-  - API 콘솔 -> 프로젝트 -> 설정에서 계정 API 리다이렉트 URL을 `https://{HASS_URL}/api/bluelink_kr/oauth/callback`, 데이터 API 리다이렉트 URL을 `https://{HASS_URL}/api/bluelink_kr/terms/callback`으로 등록합니다.
+  - API 콘솔 -> 프로젝트 -> 설정에서 계정 API 리다이렉트 URL을 `https://{HASS_URL}/api/bluelink_kr/oauth/callback`으로 등록합니다.
 - 단계
   1) `Client ID`, `Client Secret`을 입력합니다(`secrets.yaml`의 `bluelink_client_id`/`bluelink_client_secret` 값이 있으면 기본값으로 불러옵니다).
   2) Home Assistant가 설정한 `external_url`을 `redirect_uri`로 사용해 블루링크 KR 로그인 페이지가 새 창/웹뷰로 열립니다.
-  3) 기본 설정에서는 데이터 동의 호출을 건너뛰고 바로 차량 목록을 조회합니다. 데이터 동의 창을 반드시 거치려면 환경 변수 `BLUELINK_SKIP_TERMS_REQUEST=0`(또는 false/off)로 설정해 재시작하세요.
 - 저장되는 데이터
-  - 인증/서비스(`config_entries.data`): `client_id`, `client_secret`, `redirect_uri`, `access_token`, `refresh_token`, `token_type`, `access_token_expires_at`, `refresh_token_expires_at`, `user_id`, `terms_user_id`
+  - 인증/서비스(`config_entries.data`): `client_id`, `client_secret`, `redirect_uri`, `access_token`, `refresh_token`, `token_type`, `access_token_expires_at`, `refresh_token_expires_at`, `user_id`
   - 차량/선택(`config_entries.options`): `cars`, `car`, `selected_car_id`
 - 첫 설정 후 선택한 차량의 센서와 강제 새로고침 버튼이 추가됩니다.
-- 토큰 생명주기
-  - 로그인 리다이렉트 후 `authorization_code`로 `access_token`/`refresh_token`을 발급받아 저장합니다.
-  - `access_token`은 24시간마다 자동 갱신됩니다.
-  - `refresh_token`은 365일 유효하며, 로그인 후 364일이 지나면 재인증 알림을 띄우고 재로그인 플로우를 시작합니다.
 - 차량 선택/관리
-  - 동의 완료 후 차량 목록을 조회해 사용자가 선택한 차량을 기기로 등록합니다.
+  - 로그인 후 차량 목록을 조회해 사용자가 선택한 차량을 기기로 등록합니다.
   - 통합 옵션의 “재검색” 버튼으로 차량 목록을 다시 조회해 닉네임 변경을 반영하고, 목록에 없는 차량을 비활성화합니다.
 
 ## 엔티티 목록

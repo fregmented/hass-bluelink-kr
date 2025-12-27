@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import secrets
-import os
 from typing import Any
 
 import logging
@@ -16,18 +15,15 @@ from .api import (
     BluelinkAuthError,
     async_get_profile,
     async_get_car_list,
-    async_request_terms_agreement,
     async_request_token,
 )
 from .const import (
     DEFAULT_NAME,
     DOMAIN,
     OAUTH_CALLBACK_PATH,
-    TERMS_CALLBACK_PATH,
     is_ev_capable_car_type,
     normalize_car_type,
     build_authorize_url,
-    build_terms_agreement_url,
 )
 from .device import async_sync_selected_vehicle
 from .views import BluelinkUnifiedCallbackView
@@ -47,15 +43,9 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._state: str | None = None
         self._auth_url: str | None = None
         self._reauth_entry = None
-        self._terms_state: str | None = None
-        self._terms_url: str | None = None
         self._pending_auth_data: dict[str, Any] | None = None
         self._car_list: list[dict[str, Any]] | None = None
         self._abort_reason: str | None = None
-        self._skip_terms = (
-            os.getenv("BLUELINK_SKIP_TERMS_REQUEST", "1").lower()
-            in ("1", "true", "yes", "on")
-        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -71,15 +61,8 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     name="api:bluelink_kr:oauth_callback",
                 )
             )
-            self.hass.http.register_view(
-                BluelinkUnifiedCallbackView(
-                    self.hass,
-                    url=TERMS_CALLBACK_PATH,
-                    name="api:bluelink_kr:terms_callback",
-                )
-            )
             domain_data["views_registered"] = True
-            _LOGGER.debug("Registered OAuth/terms callback views from flow")
+            _LOGGER.debug("Registered OAuth callback view from flow")
 
         secret_client_id = None
         secret_client_secret = None
@@ -103,13 +86,9 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         oauth_callback_url = (
             f"{base_url.rstrip('/')}{OAUTH_CALLBACK_PATH}" if base_url else ""
         )
-        terms_callback_url = (
-            f"{base_url.rstrip('/')}{TERMS_CALLBACK_PATH}" if base_url else ""
-        )
         _LOGGER.debug(
-            "Using callback URLs oauth=%s terms=%s base_url=%s",
+            "Using callback URLs oauth=%s base_url=%s",
             oauth_callback_url,
-            terms_callback_url,
             base_url,
         )
 
@@ -163,7 +142,6 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "oauth_callback_url": oauth_callback_url,
-                "terms_callback_url": terms_callback_url,
             },
         )
 
@@ -214,57 +192,19 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             token_result.access_token,
         )
 
-        if self._skip_terms:
-            try:
-                car_list = await async_get_car_list(
-                    self.hass, access_token=token_result.access_token
-                )
-            except BluelinkAuthError as err:
-                _LOGGER.warning(
-                    "Skip terms enabled but car list failed; reverting to terms flow: %s",
-                    err,
-                )
-            else:
-                if not car_list:
-                    _LOGGER.warning(
-                        "Skip terms enabled but car list returned no cars; reverting to terms flow"
-                    )
-                else:
-                    self._pending_auth_data["terms_user_id"] = user_id
-                    self._car_list = car_list
-                    _LOGGER.info(
-                        "Skip terms enabled; proceeding directly to vehicle selection"
-                    )
-                    return self.async_external_step_done(next_step_id="vehicle")
-
-        self._terms_state = secrets.token_urlsafe(16)
-        domain_data = self.hass.data.setdefault(DOMAIN, {})
-        callback_states: dict[str, str] = domain_data.setdefault("callback_states", {})
-        callback_states[self._terms_state] = self.flow_id
-        if self._state:
-            callback_states[self._state] = self.flow_id
-        self._terms_url = build_terms_agreement_url(
-            access_token=token_result.access_token, state=self._terms_state
-        )
-        _LOGGER.debug(
-            "Terms external step: state=%s url=%s",
-            self._terms_state,
-            self._terms_url,
-        )
         try:
-            await async_request_terms_agreement(
-                self.hass,
-                access_token=token_result.access_token,
-                state=self._terms_state,
+            car_list = await async_get_car_list(
+                self.hass, access_token=token_result.access_token
             )
-        except BluelinkAuthError as err:
-            _LOGGER.warning(
-                "Terms agreement request failed, continuing anyway: %s. "
-                "Unset BLUELINK_SKIP_TERMS_REQUEST to restore original behavior.",
-                err,
-            )
+        except BluelinkAuthError:
+            return self._abort_external("invalid_auth")
 
-        return self.async_external_step(step_id="terms", url=self._terms_url)
+        if not car_list:
+            return self._abort_external("no_cars")
+
+        self._car_list = car_list
+        _LOGGER.debug("Fetched %d cars after auth", len(car_list))
+        return self.async_external_step_done(next_step_id="vehicle")
 
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
         """Handle reauthentication trigger."""
@@ -277,40 +217,10 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {"client_id": self._client_id, "client_secret": self._client_secret}
         )
 
-    async def async_step_terms(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Handle terms agreement callback."""
-        if user_input is None:
-            return self._abort_external("authorization_pending")
-
-        if not self._pending_auth_data:
-            return self._abort_external("invalid_auth")
-
-        user_id = user_input.get("authorization")
-        if not user_id:
-            return self._abort_external("invalid_auth")
-
-        self._pending_auth_data["terms_user_id"] = user_id
-
-        try:
-            car_list = await async_get_car_list(
-                self.hass, access_token=self._pending_auth_data["access_token"]
-            )
-        except BluelinkAuthError:
-            return self._abort_external("invalid_auth")
-
-        if not car_list:
-            return self._abort_external("no_cars")
-
-        self._car_list = car_list
-        _LOGGER.debug("Fetched %d cars after terms", len(car_list))
-        return self.async_external_step_done(next_step_id="vehicle")
-
     async def async_step_vehicle(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle vehicle selection after terms agreement."""
+        """Handle vehicle selection after authorization."""
         if not self._car_list:
             return self.async_abort(reason="no_cars")
         if not self._pending_auth_data:
