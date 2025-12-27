@@ -1,0 +1,20 @@
+type: custom:bluelink-kr-card
+title: 아이오닉 6
+show_warnings: true
+entities:
+  driving_range: sensor.ioniq6_driving_range
+  odometer: sensor.ioniq6_odometer
+  ev_soc: sensor.ioniq6_ev_soc
+  charging_state: sensor.ioniq6_charging_state
+  charger_connection: sensor.ioniq6_charger_connection
+  charging_target_soc: sensor.ioniq6_charging_target_soc
+  charging_time_remaining: sensor.ioniq6_charging_time_remaining
+  charging_time_estimate: sensor.ioniq6_charging_time_estimate
+  warnings:
+    - sensor.ioniq6_low_fuel_warning
+    - sensor.ioniq6_tire_pressure_warning
+    - sensor.ioniq6_lamp_warning
+    - sensor.ioniq6_smart_key_battery_warning
+    - sensor.ioniq6_washer_fluid_warning
+    - sensor.ioniq6_brake_fluid_warning
+    - sensor.ioniq6_engine_oil_warning

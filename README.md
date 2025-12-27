@@ -66,6 +66,41 @@
 - 버튼: Force Refresh
 
 
+## Lovelace 전용 카드
+
+- `www/bluelink-kr-card.js`로 제공되는 전용 Lovelace 카드입니다. HACS로 통합을 설치해도 `www` 폴더는 자동으로 서빙되지 않으니 Home Assistant 설정 폴더의 `www`로 직접 복사(또는 심링크)해야 합니다.
+- 등록 절차
+  1. 이 저장소의 `www/bluelink-kr-card.js`를 Home Assistant 설정 폴더의 `www/bluelink-kr-card.js` 위치에 둡니다(`config/www` 기준, `/local/bluelink-kr-card.js`로 접근).
+  2. 설정 → 대시보드 → 우상단 메뉴 → 리소스 → 리소스 추가에서 URL을 `/local/bluelink-kr-card.js`, 유형을 `JavaScript Module`로 등록합니다.
+  3. Lovelace에 카드를 추가할 때 `type: custom:bluelink-kr-card`로 설정합니다.
+- Lovelace 시각 편집기에서 카드 유형 선택 후 각 센서 엔티티를 바로 지정할 수 있습니다(경고 센서는 필요한 만큼 추가).
+- 예시 구성(`examples/lovelace/bluelink-kr-card.yaml`):
+
+```yaml
+type: custom:bluelink-kr-card
+title: 아이오닉 6
+show_warnings: true
+entities:
+  driving_range: sensor.ioniq6_driving_range
+  odometer: sensor.ioniq6_odometer
+  ev_soc: sensor.ioniq6_ev_soc
+  charging_state: sensor.ioniq6_charging_state
+  charger_connection: sensor.ioniq6_charger_connection
+  charging_target_soc: sensor.ioniq6_charging_target_soc
+  charging_time_remaining: sensor.ioniq6_charging_time_remaining
+  charging_time_estimate: sensor.ioniq6_charging_time_estimate
+  warnings:
+    - sensor.ioniq6_low_fuel_warning
+    - sensor.ioniq6_tire_pressure_warning
+    - sensor.ioniq6_lamp_warning
+    - sensor.ioniq6_smart_key_battery_warning
+    - sensor.ioniq6_washer_fluid_warning
+    - sensor.ioniq6_brake_fluid_warning
+    - sensor.ioniq6_engine_oil_warning
+```
+
+- 옵션: `title`로 카드 상단 제목을 교체할 수 있으며, 경고 섹션을 숨기려면 `show_warnings: false`로 설정합니다. 경고 센서 목록은 차량 타입에 맞게 필요한 것만 포함하면 됩니다.
+
 ## 라이선스
 
 이 프로젝트는 BSD 3-Clause 라이선스를 따릅니다. 자세한 내용은 `LICENSE` 파일을 참고하세요.
