@@ -26,14 +26,7 @@ from .const import (
     build_terms_agreement_url,
 )
 from .device import async_sync_selected_vehicle
-
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required("client_id"): str,
-        vol.Required("client_secret"): str,
-    }
-)
-
+from .views import BluelinkOAuthCallbackView, BluelinkTermsCallbackView
 
 class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle config flow for Hyundai Bluelink (KR)."""
@@ -58,6 +51,18 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Collect OAuth client credentials and start external login."""
         errors: dict[str, str] = {}
+        domain_data = self.hass.data.setdefault(DOMAIN, {})
+        if not domain_data.get("views_registered"):
+            self.hass.http.register_view(BluelinkOAuthCallbackView(self.hass))
+            self.hass.http.register_view(BluelinkTermsCallbackView(self.hass))
+            domain_data["views_registered"] = True
+
+        secret_client_id = None
+        secret_client_secret = None
+        if hasattr(self.hass, "secrets"):
+            secret_client_id = self.hass.secrets.get("bluelink_client_id")
+            secret_client_secret = self.hass.secrets.get("bluelink_client_secret")
+
         base_url: str | None = None
         try:
             base_url = network.get_url(
@@ -102,9 +107,24 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Trigger browser/webview to open the authorize URL; callback is handled automatically.
                 return self.async_external_step(step_id="auth", url=self._auth_url)
 
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    "client_id",
+                    default=secret_client_id if secret_client_id else vol.UNDEFINED,
+                ): str,
+                vol.Required(
+                    "client_secret",
+                    default=secret_client_secret
+                    if secret_client_secret
+                    else vol.UNDEFINED,
+                ): str,
+            }
+        )
+
         return self.async_show_form(
             step_id="user",
-            data_schema=STEP_USER_DATA_SCHEMA,
+            data_schema=schema,
             errors=errors,
             description_placeholders={
                 "oauth_callback_url": oauth_callback_url,
@@ -208,7 +228,7 @@ class BluelinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="no_cars")
 
         self._car_list = car_list
-        return await self.async_step_vehicle()
+        return self.async_external_step_done(next_step_id="vehicle")
 
     async def async_step_vehicle(
         self, user_input: dict[str, Any] | None = None

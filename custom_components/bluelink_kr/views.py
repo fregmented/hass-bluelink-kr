@@ -34,10 +34,16 @@ class BluelinkOAuthCallbackView(HomeAssistantView):
             return web.Response(status=400, text="Unknown or expired state.")
 
         # Resume the config flow with the received authorization code.
-        await self.hass.config_entries.flow.async_configure(
-            flow_id,
-            user_input={"authorization_code": code, "state": state},
-        )
+        try:
+            await self.hass.config_entries.flow.async_configure(
+                flow_id,
+                user_input={"authorization_code": code, "state": state},
+            )
+        except ValueError:
+            return web.Response(
+                status=400,
+                text="Flow not in expected state. Please restart the integration setup.",
+            )
 
         return web.Response(
             text="Authorization received. You can close this window and return to Home Assistant."
@@ -80,6 +86,11 @@ class BluelinkTermsCallbackView(HomeAssistantView):
                 "err_msg": err_msg,
             },
         )
+        except ValueError:
+            return web.Response(
+                status=400,
+                text="Flow not in expected state. Please restart the integration setup.",
+            )
 
         if err_code:
             return web.Response(

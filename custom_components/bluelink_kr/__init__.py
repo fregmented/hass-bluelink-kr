@@ -40,8 +40,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     domain_data.setdefault("oauth_states", {})
     domain_data.setdefault("reauth_notified", set())
     domain_data.setdefault("terms_states", {})
-    hass.http.register_view(BluelinkOAuthCallbackView(hass))
-    hass.http.register_view(BluelinkTermsCallbackView(hass))
+    if not domain_data.get("views_registered"):
+        hass.http.register_view(BluelinkOAuthCallbackView(hass))
+        hass.http.register_view(BluelinkTermsCallbackView(hass))
+        domain_data["views_registered"] = True
     return True
 
 
