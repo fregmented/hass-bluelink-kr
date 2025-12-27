@@ -1,0 +1,11 @@
+{
+  "domain": "bluelink_kr",
+  "name": "Hyundai Bluelink (KR)",
+  "version": "0.0.1",
+  "documentation": "https://github.com/hanwoollee/hass-bluelink-kr",
+  "config_flow": true,
+  "requirements": [],
+  "codeowners": ["@hanwoollee"],
+  "iot_class": "cloud_polling",
+  "integration_type": "service"
+}

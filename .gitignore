@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Home Assistant integration build artifacts
+.storage/
+
+# Virtual environments
+venv/
+.venv/
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

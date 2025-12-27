@@ -1,0 +1,33 @@
+{
+  "title": "Hyundai Bluelink (KR)",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hyundai Bluelink (KR) OAuth setup",
+        "description": "Enter your Hyundai Bluelink (South Korea) OAuth client details. In the API console Settings, set Login redirect URL to {oauth_callback_url} and Data redirect URL to {terms_callback_url}. After confirming, the login page will open in a new window/webview using your Home Assistant external URL as redirect_uri.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret"
+        }
+      },
+      "vehicle": {
+        "title": "Select vehicle",
+        "description": "After consent, your vehicles were fetched. Choose which vehicle to register.",
+        "data": {
+          "selected_car_id": "Vehicle to register"
+        }
+      }
+    },
+    "abort": {
+      "authorization_pending": "Waiting for login to finish. Complete authentication in the new window.",
+      "invalid_auth": "Authentication is invalid.",
+      "no_cars": "No registered vehicles were found.",
+      "reauth_successful": "Reauthentication completed."
+    },
+    "error": {
+      "external_url_required": "Set an External URL in Settings > System > Network.",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unknown error"
+    }
+  }
+}

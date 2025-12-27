@@ -1,0 +1,33 @@
+{
+  "title": "현대 블루링크 (대한민국)",
+  "config": {
+    "step": {
+      "user": {
+        "title": "현대 블루링크(대한민국) OAuth 설정",
+        "description": "대한민국 현대 블루링크 OAuth 클라이언트 정보를 입력하세요. API 콘솔 > 설정에서 로그인 리다이렉트 URL은 {oauth_callback_url}, 데이터 리다이렉트 URL은 {terms_callback_url}로 등록하세요. 확인 후 Home Assistant 외부 URL을 redirect_uri로 사용해 로그인 페이지가 새 창/웹뷰로 열립니다.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret"
+        }
+      },
+      "vehicle": {
+        "title": "차량 선택",
+        "description": "동의 완료 후 계정의 차량 목록을 가져왔습니다. 등록할 차량을 선택하세요.",
+        "data": {
+          "selected_car_id": "등록할 차량"
+        }
+      }
+    },
+    "abort": {
+      "authorization_pending": "로그인을 기다리는 중입니다. 새 창에서 인증을 완료하세요.",
+      "invalid_auth": "인증 정보가 올바르지 않습니다.",
+      "no_cars": "등록된 차량을 찾을 수 없습니다.",
+      "reauth_successful": "재인증이 완료되었습니다."
+    },
+    "error": {
+      "external_url_required": "설정 > 시스템 > 네트워크에서 외부 URL을 설정하세요.",
+      "invalid_auth": "인증 정보가 올바르지 않습니다",
+      "unknown": "알 수 없는 오류가 발생했습니다"
+    }
+  }
+}

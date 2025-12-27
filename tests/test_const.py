@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+from custom_components.bluelink_kr.const import (
+    build_authorize_url,
+    build_terms_agreement_url,
+)
+
+
+def test_build_authorize_url_encodes_params():
+    url = build_authorize_url(
+        client_id="client id",
+        redirect_uri="https://example.com/callback?x=1&y=2",
+        state="my state",
+    )
+    assert "client_id=client%20id" in url
+    assert "redirect_uri=https%3A%2F%2Fexample.com%2Fcallback%3Fx%3D1%26y%3D2" in url
+    assert "state=my%20state" in url
+
+
+def test_build_terms_agreement_url_encodes_params():
+    url = build_terms_agreement_url(access_token="abc 123", state="st@te")
+    assert "token=Bearer%20abc%20123" in url
+    assert "state=st%40te" in url
